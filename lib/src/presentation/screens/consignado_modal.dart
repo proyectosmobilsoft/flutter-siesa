@@ -299,6 +299,7 @@ class _ConsignadoModalState extends ConsumerState<ConsignadoModal> {
                             Navigator.pop(context, {
                               'descripcion': _selectedConsignado,
                               'nroCuenta': selectedAccount.nroCuenta ?? '',
+                              'id': selectedAccount.id, // ID de la cuenta bancaria
                             });
                           },
                     style: ElevatedButton.styleFrom(

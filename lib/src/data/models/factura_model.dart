@@ -116,85 +116,192 @@ class FacturaModel extends Factura {
     return value.toString().trim();
   }
 
+  /// Helper para parsear números con coma como separador decimal (formato: "500000000,00")
+  static double? _parseDoubleWithComma(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      // El formato viene como "500000000,00" (coma como separador decimal)
+      // Reemplazar coma por punto para parsear
+      final cleaned = value.trim().replaceAll(',', '.');
+      if (cleaned.isEmpty || cleaned == 'NULL') return null;
+      return double.tryParse(cleaned);
+    }
+    return null;
+  }
+
+  /// Helper para parsear fecha en formato "2025-07-08 00:00:00.000"
+  static String _parseFecha(String? fechaValue) {
+    if (fechaValue == null || fechaValue.isEmpty) return '';
+    // Extraer solo la fecha (antes del espacio)
+    return fechaValue.split(' ')[0];
+  }
+
   /// Crea un FacturaModel desde un JSON
   factory FacturaModel.fromJson(Map<String, dynamic> json) {
-    // Mapear campos originales desde los nuevos campos de la API
-    // f350_id_sucursal puede venir como string con espacios: "0  "
-    final idSucursalRaw = json['f350_id_sucursal'];
+    // Mapear campos desde el nuevo formato del endpoint
+    // Los nuevos campos son: rowidsa, idco, idun, doccruce, fecha, fecha_vcto_docto, vencimiento, etc.
+    
+    // rowidsa → rowid
+    final rowid = _parseInt(json['rowidsa']) ?? _parseInt(json['rowid']);
+    
+    // idco → idCo
+    final idCo = _parseString(json['idco']) ?? _parseString(json['idCo']) ?? '001';
+    
+    // idun → idUn (nuevo campo, no se mapea directamente pero se puede usar si es necesario)
+    
+    // doccruce → doccruce (usado para extraer número de factura)
+    final doccruce = _parseString(json['doccruce']) ?? '';
+    
+    // fecha → fecha (formato: "2025-06-30 00:00:00.000")
+    final fechaRaw = json['fecha'];
+    final fecha = fechaRaw != null 
+        ? _parseFecha(fechaRaw.toString())
+        : '';
+    
+    // fecha_vcto_docto → fecha_vcto_docto (nuevo campo)
+    final fechaVctoDoctoRaw = json['fecha_vcto_docto'];
+    final fechaVctoDocto = fechaVctoDoctoRaw != null 
+        ? _parseFecha(fechaVctoDoctoRaw.toString())
+        : '';
+    
+    // vencimiento → vence (formato: "2025-07-08 00:00:00.000")
+    final vencimientoRaw = json['vencimiento'];
+    final vence = vencimientoRaw != null 
+        ? _parseFecha(vencimientoRaw.toString())
+        : (fechaVctoDocto.isNotEmpty ? fechaVctoDocto : '');
+    
+    // diasvencidos → diasvencidos (nuevo campo, no se mapea directamente)
+    
+    // saldo → saldo (formato: "247950000,00" con coma como separador decimal)
+    final saldoRaw = json['saldo'];
+    final saldo = saldoRaw != null
+        ? _parseDoubleWithComma(saldoRaw.toString()) ?? 0.0
+        : 0.0;
+    
+    // saldoalterno → saldoalterno (nuevo campo, no se mapea directamente)
+    
+    // chequesposfechados → chequesposfechados (nuevo campo, no se mapea directamente)
+    
+    // idtercero → rowidTercero
+    final rowidTercero = _parseInt(json['idtercero']) ?? _parseInt(json['rowidTercero']);
+    
+    // nittercero → nittercero (nuevo campo, no se mapea directamente)
+    
+    // razontercero → razontercero (nuevo campo, no se mapea directamente)
+    
+    // idsucursal → idSucursal
+    final idSucursalRaw = json['idsucursal'] ?? json['idSucursal'] ?? json['sucursal'];
     final idSucursal = idSucursalRaw != null 
         ? (idSucursalRaw is String ? idSucursalRaw.trim() : idSucursalRaw.toString().trim())
-        : '';
+        : '001';
     
-    // f350_id_tipo_docto viene como string: "FCE"
-    final idTipoDoctoRaw = json['f350_id_tipo_docto'];
-    final idTipoDocto = idTipoDoctoRaw != null 
-        ? (idTipoDoctoRaw is String ? idTipoDoctoRaw.trim() : idTipoDoctoRaw.toString().trim())
-        : '';
+    // dessucursal → dessucursal (nuevo campo, no se mapea directamente)
     
-    // f350_consec_docto puede venir como número (2820) o string
-    final consecDoctoValue = json['f350_consec_docto'];
-    final consecDocto = consecDoctoValue != null 
-        ? (consecDoctoValue is num 
-            ? consecDoctoValue.toString() 
-            : (consecDoctoValue as String?)?.trim() ?? '')
-        : '';
+    // idauxiliar → idauxiliar (nuevo campo, no se mapea directamente)
     
-    // f350_fecha viene como ISO string: "2021-02-23T00:00:00.000Z"
-    final fechaValue = json['f350_fecha'];
-    final fecha = fechaValue != null
-        ? (fechaValue is String 
-            ? fechaValue.split('T')[0] // Extraer solo la fecha: "2021-02-23"
-            : fechaValue.toString())
-        : '';
+    // desauxiliar → desauxiliar (nuevo campo, no se mapea directamente)
     
-    // f350_total_db y f350_total_cr vienen como números
-    final totalDb = _parseDouble(json['f350_total_db']);
-    final totalCr = _parseDouble(json['f350_total_cr']);
+    // idvendedor → idvendedor (nuevo campo, no se mapea directamente)
     
-    // Calcular saldo (totalDb - totalCr, aunque normalmente son iguales)
-    // Para facturas, el saldo sería el totalDb menos los abonos
-    // Por ahora usamos totalDb como valor base
-    final saldo = totalDb ?? 0.0;
+    // desvendedor → desvendedor (nuevo campo, no se mapea directamente)
     
-    debugPrint('🔍 Factura parseada - Sucursal: "$idSucursal", Tipo: "$idTipoDocto", Factura: "$consecDocto", Fecha: "$fecha", TotalDb: $totalDb');
+    // fechaprontopago → fechaprontopago (nuevo campo, no se mapea directamente)
+    
+    // valordescuentopp → valordescuentopp (nuevo campo, no se mapea directamente)
+    
+    // notas → notas
+    final notas = _parseString(json['notas']);
+    
+    // simbolomoneda → simbolomoneda (nuevo campo, no se mapea directamente)
+    
+    // formatototalmoneda → formatototalmoneda (nuevo campo, no se mapea directamente)
+    
+    // idmoneda → idMonedaDocto
+    final idMonedaDocto = _parseString(json['idmoneda']) ?? _parseString(json['idMonedaDocto']);
+    
+    // decimalesmoneda → decimalesmoneda (nuevo campo, no se mapea directamente)
+    
+    // fecha_docto_cruce → fecha_docto_cruce (nuevo campo)
+    final fechaDoctoCruceRaw = json['fecha_docto_cruce'];
+    final fechaDoctoCruce = fechaDoctoCruceRaw != null
+        ? _parseFecha(fechaDoctoCruceRaw.toString())
+        : fecha;
+    
+    // prefijo → prefijo
+    final prefijo = _parseString(json['prefijo']) ?? '';
+    
+    // Extraer número de factura desde doccruce si está disponible
+    // Formato: "BQE-00026024-000" → extraer "00026024"
+    String facturaFinal = '';
+    if (doccruce.isNotEmpty) {
+      final parts = doccruce.split('-');
+      if (parts.length >= 2) {
+        facturaFinal = parts[1]; // Tomar la parte del medio
+      } else {
+        facturaFinal = doccruce;
+      }
+    }
+    
+    // Si no hay factura desde doccruce, intentar otros campos
+    if (facturaFinal.isEmpty) {
+      facturaFinal = _parseString(json['factura']) ?? 
+                     _parseString(json['consecDocto']) ?? 
+                     _parseString(json['f350_consec_docto']) ?? '';
+    }
+    
+    // Determinar tipo de documento desde prefijo o doccruce
+    String tipoFinal = '';
+    if (doccruce.isNotEmpty) {
+      final parts = doccruce.split('-');
+      if (parts.isNotEmpty) {
+        tipoFinal = parts[0]; // Tomar el prefijo del doccruce (ej: "BQE")
+      }
+    }
+    if (tipoFinal.isEmpty) {
+      tipoFinal = prefijo.isNotEmpty 
+          ? prefijo
+          : (_parseString(json['tipo']) ?? 
+             _parseString(json['idTipoDocto']) ?? 
+             _parseString(json['f350_id_tipo_docto']) ?? '');
+    }
+    
+    // Usar fecha_docto_cruce como fecha principal, o fecha si no existe
+    final fechaFinal = fechaDoctoCruce.isNotEmpty ? fechaDoctoCruce : fecha;
+    
+    // Calcular valor y abonos desde saldo
+    final valorFinal = saldo;
+    final abonosFinal = 0.0; // Los abonos no vienen en el nuevo formato
+    
+    debugPrint('🔍 Factura parseada - Tipo: "$tipoFinal", Factura: "$facturaFinal", Vence: "$vence", Saldo: $saldo');
+    
+    final totalDb = _parseDouble(json['f350_total_db']) ?? valorFinal;
+    final totalCr = _parseDouble(json['f350_total_cr']) ?? abonosFinal;
 
     return FacturaModel(
-      // Campos originales mapeados desde los nuevos campos
+      // Campos principales mapeados desde el nuevo formato
       sucursal: idSucursal.isNotEmpty 
           ? idSucursal
-          : (_parseString(json['sucursal']) ?? ''),
-      tipo: idTipoDocto.isNotEmpty
-          ? idTipoDocto
-          : (_parseString(json['tipo']) ?? ''),
-      factura: consecDocto.isNotEmpty 
-          ? consecDocto
-          : (_parseString(json['factura']) ?? 
-             _parseString(json['numero']) ?? 
-             _parseString(json['numero_factura']) ?? ''),
-      fecha: fecha.isNotEmpty
-          ? fecha
-          : (_parseString(json['fecha']) ?? ''),
-      vence: _parseString(json['vence']) ?? 
-             _parseString(json['fecha_vencimiento']) ?? 
-             fecha, // Si no hay fecha de vencimiento, usar la fecha del documento
-      valor: totalDb ?? 
-             _parseDouble(json['valor']) ?? 
-             _parseDouble(json['valor_total']) ?? 0.0,
-      abonos: _parseDouble(json['abonos']) ?? 
-              _parseDouble(json['valor_abonado']) ?? 0.0,
-      saldo: saldo, // Usar el saldo calculado (totalDb por ahora)
+          : (_parseString(json['sucursal']) ?? '001'),
+      tipo: tipoFinal,
+      factura: facturaFinal,
+      fecha: fechaFinal,
+      vence: vence,
+      valor: valorFinal,
+      abonos: abonosFinal,
+      saldo: saldo,
       valRecibo: 0.0,
       ok: false,
-      // Nuevos campos de la API
-      idCia: _parseInt(json['f350_id_cia']),
-      rowid: _parseInt(json['f350_rowid']),
-      idCo: _parseString(json['f350_id_co']),
-      idTipoDocto: idTipoDocto,
-      consecDocto: consecDocto,
-      prefijo: _parseString(json['f350_prefijo']),
-      idPeriodo: _parseString(json['f350_id_periodo']),
-      rowidTercero: _parseInt(json['f350_rowid_tercero']),
-      idSucursal: idSucursal,
+      // Campos adicionales
+      idCia: _parseInt(json['f350_id_cia']) ?? _parseInt(json['idCia']),
+      rowid: rowid,
+      idCo: idCo,
+      idTipoDocto: tipoFinal,
+      consecDocto: facturaFinal,
+      prefijo: prefijo,
+      idPeriodo: _parseString(json['f350_id_periodo']) ?? _parseString(json['idPeriodo']),
+      rowidTercero: rowidTercero,
+      idSucursal: idSucursal.isNotEmpty ? idSucursal : '001',
       totalDb: totalDb,
       totalCr: totalCr,
       idClaseDocto: _parseString(json['f350_id_clase_docto']),
@@ -213,13 +320,13 @@ class FacturaModel extends Factura {
       nroImpresiones: _parseInt(json['f350_nro_impresiones']),
       fechaTsHabilitaImp: _parseString(json['f350_fecha_ts_habilita_imp']),
       usuarioHabilitaImp: _parseString(json['f350_usuario_habilita_imp']),
-      notas: _parseString(json['f350_notas']),
+      notas: notas ?? _parseString(json['f350_notas']),
       rowidDoctoBase: _parseInt(json['f350_rowid_docto_base']),
       referencia: _parseString(json['f350_referencia']),
       idMandato: _parseString(json['f350_id_mandato']),
       rowidMovtoEntidad: _parseInt(json['f350_rowid_movto_entidad']),
       idMotivoOtros: _parseString(json['f350_id_motivo_otros']),
-      idMonedaDocto: _parseString(json['f350_id_moneda_docto']),
+      idMonedaDocto: idMonedaDocto ?? _parseString(json['f350_id_moneda_docto']),
       idMonedaConv: _parseString(json['f350_id_moneda_conv']),
       indFormaConv: _parseInt(json['f350_ind_forma_conv']),
       tasaConv: _parseDouble(json['f350_tasa_conv']),

@@ -8,8 +8,14 @@ class AppConfig {
   /// IMPORTANTE: Cambiar por la IP de tu máquina (ej: '192.168.1.100')
   /// Para encontrar tu IP en Windows: ipconfig
   /// Para encontrar tu IP en Mac/Linux: ifconfig o ip addr
+  ///
+  /// NOTA: No uses 'localhost' en dispositivos móviles/emuladores porque
+  /// se refiere al dispositivo mismo, no a tu máquina de desarrollo.
+  /// Usa la IP real de tu máquina o '10.0.2.2' para emulador Android.
   // static const String localIp = '10.0.2.2'; // Para emulador Android
-  static const String localIp = 'localhost'; // IP de la máquina
+  // static const String localIp = 'localhost'; // Solo funciona en navegador web
+  static const String localIp =
+      '179.33.214.87'; // IP de la máquina (o usa tu IP local)
 
   /// URL base de la API según el ambiente
   static String get baseUrl {

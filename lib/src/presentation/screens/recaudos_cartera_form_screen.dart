@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/errors/server_exception.dart';
+import '../../data/datasources/recibo_caja_remote_datasource.dart';
 import '../../domain/entities/client.dart';
 import '../providers/bank_account_notifier.dart';
 import '../providers/company_notifier.dart';
 import '../providers/factura_notifier.dart';
-import '../providers/recibo_notifier.dart';
 import 'busqueda_clientes_modal.dart';
 import 'busqueda_conceptos_modal.dart';
 import 'formas_pago_modal.dart';
@@ -63,6 +64,13 @@ class _RecaudosCarteraFormScreenState
 
   // Contador para número de recibo autoincrementable
   static int _reciboCounter = 3641;
+
+  // Datasource para obtener el próximo consecutivo
+  final ReciboCajaRemoteDataSource _reciboCajaDataSource =
+      ReciboCajaRemoteDataSource();
+
+  // Consecutivo obtenido del endpoint
+  int? _consecutivoObtenido;
 
   // Variables para el tab de Anticipos
   String? _tipoAnticipoSeleccionado; // 'cliente' o null
@@ -437,6 +445,63 @@ class _RecaudosCarteraFormScreenState
   String _generateReciboNumber() {
     _reciboCounter++;
     return _reciboCounter.toString().padLeft(8, '0');
+  }
+
+  /// Obtener el próximo consecutivo del endpoint cuando se selecciona una compañía
+  Future<void> _obtenerProximoConsecutivo(int idCia) async {
+    try {
+      // Obtener idCo de la compañía seleccionada (por defecto '001')
+      String idCo = '001';
+      final companyState = ref.read(companyListNotifierProvider);
+      final companies = companyState.whenOrNull(data: (companies) => companies);
+
+      if (companies != null && companies.isNotEmpty) {
+        try {
+          companies.firstWhere((c) => c.id == idCia);
+          // Si la compañía tiene un idCo, usarlo; si no, usar '001'
+          idCo = '001'; // Por ahora usar '001' por defecto
+        } catch (e) {
+          // Si no se encuentra, usar '001' por defecto
+        }
+      }
+
+      print('📡 idCia: $idCia');
+
+      final response = await _reciboCajaDataSource.obtenerProximoConsecutivo(
+        idCia: idCia,
+        idCo: idCo,
+      );
+
+      if (mounted) {
+        setState(() {
+          _consecutivoObtenido = response.f022ConsProximo;
+          // Actualizar el campo de recibo con el consecutivo obtenido
+          _reciboController.text = response.f022ConsProximo.toString();
+        });
+      }
+    } on ServerException catch (e) {
+      // Mostrar error pero no bloquear el formulario
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al obtener próximo consecutivo: ${e.message}'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      // Mostrar error genérico
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error inesperado: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -1422,9 +1487,12 @@ class _RecaudosCarteraFormScreenState
         if (companies.isNotEmpty && _carteraCcSeleccionado == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
+              final primeraCompaniaId = companies.first.id;
               setState(() {
-                _carteraCcSeleccionado = companies.first.id;
+                _carteraCcSeleccionado = primeraCompaniaId;
               });
+              // Obtener el próximo consecutivo cuando se selecciona automáticamente la primera compañía
+              _obtenerProximoConsecutivo(primeraCompaniaId);
             }
           });
         }
@@ -1457,6 +1525,10 @@ class _RecaudosCarteraFormScreenState
             setState(() {
               _carteraCcSeleccionado = value;
             });
+            // Obtener el próximo consecutivo cuando se selecciona una compañía
+            if (value != null) {
+              _obtenerProximoConsecutivo(value);
+            }
           },
         );
       },
@@ -3238,7 +3310,9 @@ class _RecaudosCarteraFormScreenState
                       int? idCia;
                       String? idCo;
                       if (_carteraCcSeleccionado != null) {
-                        final companyState = ref.read(companyListNotifierProvider);
+                        final companyState = ref.read(
+                          companyListNotifierProvider,
+                        );
                         final companies = companyState.whenOrNull(
                           data: (companies) => companies,
                         );
@@ -3248,7 +3322,8 @@ class _RecaudosCarteraFormScreenState
                               (c) => c.id == _carteraCcSeleccionado,
                             );
                             idCia = company.id;
-                            idCo = '001'; // Valor por defecto, ajustar según necesidad
+                            idCo =
+                                '001'; // Valor por defecto, ajustar según necesidad
                           } catch (e) {
                             final company = companies.first;
                             idCia = company.id;
@@ -3256,7 +3331,7 @@ class _RecaudosCarteraFormScreenState
                           }
                         }
                       }
-                      
+
                       // Parsear fecha del controlador
                       DateTime? fecha;
                       try {
@@ -3271,17 +3346,35 @@ class _RecaudosCarteraFormScreenState
                       } catch (e) {
                         fecha = DateTime.now();
                       }
-                      
-                      // Obtener consecutivo del recibo
-                      final consecDocto = int.tryParse(
-                        _reciboController.text.replaceAll(RegExp(r'[^\d]'), ''),
-                      ) ?? 0;
-                      
-                      // Obtener total del recibo
-                      final totalRecibo = double.tryParse(
-                        _vrReciboController.text.replaceAll(',', '').replaceAll('.', ''),
-                      ) ?? 0.0;
-                      
+
+                      // Obtener consecutivo del recibo (usar el obtenido del endpoint si existe)
+                      final consecDocto =
+                          _consecutivoObtenido ??
+                          int.tryParse(
+                            _reciboController.text.replaceAll(
+                              RegExp(r'[^\d]'),
+                              '',
+                            ),
+                          ) ??
+                          0;
+
+                      // Obtener total del recibo (vrRecibo sin formatear, sin decimales)
+                      final vrReciboText = _vrReciboController.text
+                                .replaceAll(',', '')
+                          .replaceAll('.', '');
+                      final vrRecibo = int.tryParse(vrReciboText) ?? 0;
+                      final totalRecibo = vrRecibo.toDouble();
+
+                      // Obtener la primera factura seleccionada para obtener el rowid_sa
+                      final facturasSeleccionadas = _carteraFacturas
+                          .where((f) => f['ok'] == true)
+                          .toList();
+                      int? rowidSa;
+                      if (facturasSeleccionadas.isNotEmpty) {
+                        final primeraFactura = facturasSeleccionadas.first;
+                        rowidSa = (primeraFactura['rowid'] as num?)?.toInt();
+                      }
+
                       // Mostrar modal de formas de pago con animación
                       final result = await showGeneralDialog<dynamic>(
                         context: context,
@@ -3305,6 +3398,14 @@ class _RecaudosCarteraFormScreenState
                                   ? null
                                   : _observacionController.text.trim(),
                               idCoMov: '001',
+                              vrRecibo: vrRecibo, // Valor sin formatear, sin decimales
+                              rowidSa: rowidSa, // Primera factura seleccionada
+                              usuario: 'lgarzon', // TODO: Obtener del usuario actual
+                              idCaja: '001', // TODO: Obtener de la configuración
+                              moneda: 'COP', // TODO: Obtener de la configuración
+                              rowidCobrador: 74, // TODO: Obtener del cobrador seleccionado
+                              rowidFe: 3, // TODO: Obtener de la configuración
+                              idUn: '99', // TODO: Obtener de la configuración
                             ),
                         transitionBuilder:
                             (context, animation, secondaryAnimation, child) =>
@@ -3328,82 +3429,18 @@ class _RecaudosCarteraFormScreenState
 
                       // Verificar si se guardó correctamente
                       bool guardado = false;
-                      List<Map<String, dynamic>> formasPago = [];
-                      String numeroCuentaModal = '';
 
                       if (result != null) {
                         if (result is Map<String, dynamic>) {
                           guardado = result['guardado'] == true;
-                          final formasPagoData = result['formasPago'];
-                          if (formasPagoData is List) {
-                            formasPago = formasPagoData
-                                .map((e) => Map<String, dynamic>.from(e as Map))
-                                .toList();
-                          }
-                          // Obtener el número de cuenta del modal
-                          numeroCuentaModal =
-                              result['numeroCuenta'] as String? ?? '';
                         } else if (result is bool) {
                           guardado = result;
                         }
                       }
 
                       if (guardado && mounted) {
-                        // Obtener información de la compañía seleccionada
-                        String nombreCompania = '';
-                        String nitCompania = '';
-                        if (_carteraCcSeleccionado != null) {
-                          final companyState = ref.read(
-                            companyListNotifierProvider,
-                          );
-                          final companies = companyState.whenOrNull(
-                            data: (companies) => companies,
-                          );
-                          if (companies != null && companies.isNotEmpty) {
-                            try {
-                              final company = companies.firstWhere(
-                                (c) => c.id == _carteraCcSeleccionado,
-                              );
-                              nombreCompania = company.razonSocial;
-                              nitCompania = company.nitCompleto;
-                            } catch (e) {
-                              final company = companies.first;
-                              nombreCompania = company.razonSocial;
-                              nitCompania = company.nitCompleto;
-                            }
-                          }
-                        }
-
-                        // Guardar el recibo en memoria
-                        final reciboGuardado = ReciboGuardado(
-                          id: DateTime.now().millisecondsSinceEpoch.toString(),
-                          numeroRecibo: _reciboController.text,
-                          fecha: _fechaController.text,
-                          cliente: _carteraClienteController.text,
-                          nit: _carteraNitController.text,
-                          totalRecibo:
-                              double.tryParse(
-                                _vrReciboController.text
-                                    .replaceAll(',', '')
-                                    .replaceAll('.', ''),
-                              ) ??
-                              0.0,
-                          netoRecibo: _netoRecibo,
-                          formasPago: formasPago,
-                          cuenta: numeroCuentaModal.isNotEmpty
-                              ? numeroCuentaModal
-                              : (_nroCuentaConsignado ?? ''),
-                          fechaCreacion: DateTime.now(),
-                          nombreCompania: nombreCompania,
-                          nitCompania: nitCompania,
-                        );
-
-                        // Simular guardado
-                        await ref
-                            .read<ReciboListNotifier>(
-                              reciboListNotifierProvider.notifier,
-                            )
-                            .agregarRecibo(reciboGuardado);
+                        // El recibo ya fue procesado exitosamente en el endpoint
+                        // No se guarda en memoria, solo se muestra el mensaje de éxito
 
                         // Cerrar formulario y redirigir al listado ANTES de mostrar el mensaje
                         // Esto asegura que el loading del modal se cierre primero
