@@ -122,12 +122,6 @@ class _RecaudosCarteraFormScreenState
 
   /// Calcular totales dinámicamente
   void _calcularTotales({bool actualizarVrRecibo = true}) {
-    // Calcular total de Val. Recibo de todas las facturas (suma de todos los valores)
-    double totalVrRecibo = 0;
-    for (final factura in _carteraFacturas) {
-      totalVrRecibo += factura['valRecibo'] as double? ?? 0.0;
-    }
-
     // Calcular total de retenciones
     double totalRetenciones = 0;
     for (final concepto in _carteraConceptos) {
@@ -144,25 +138,23 @@ class _RecaudosCarteraFormScreenState
       totalCartera += totalDb ?? saldo;
     }
 
+    // Obtener el valor del recibo ingresado por el usuario (no cambiar automáticamente)
+    final vrReciboText = _vrReciboController.text
+        .replaceAll(',', '')
+        .replaceAll('.', '');
+    final vrReciboUsuario = double.tryParse(vrReciboText) ?? 0.0;
+
     setState(() {
       _retenciones = totalRetenciones;
       _carteraSaldoController.text = totalCartera > 0
           ? _formatCurrencyInput(totalCartera)
           : '0';
 
-      // Actualizar Vr Recibo con la suma de todos los Val. Recibo de las facturas
-      // Solo si no se está actualizando desde el campo Vr Recibo
-      if (actualizarVrRecibo) {
-        final formatted = _formatCurrencyInput(totalVrRecibo);
-        if (_vrReciboController.text != formatted) {
-          _vrReciboController.value = TextEditingValue(
-            text: formatted,
-            selection: TextSelection.collapsed(offset: formatted.length),
-          );
-        }
-      }
+      // NO actualizar automáticamente el Vr Recibo - debe mantenerse fijo
+      // El valor del recibo solo cambia cuando el usuario lo modifica manualmente
 
-      _netoRecibo = totalVrRecibo - _descuentos - _retenciones + _otrosIngresos;
+      // Calcular neto recibo usando el valor fijo del recibo ingresado por el usuario
+      _netoRecibo = vrReciboUsuario - _descuentos - _retenciones + _otrosIngresos;
     });
   }
 
@@ -1109,7 +1101,7 @@ class _RecaudosCarteraFormScreenState
       filled: true,
       fillColor: Colors.green[50],
       hintText: 'Ingrese el valor total a distribuir',
-      helperText: 'Valor distribuido automáticamente entre las facturas',
+      helperText: 'Ingrese el valor total del recibo',
     ),
     onChanged: (value) {
       // Limpiar el valor de caracteres no numéricos
@@ -1148,8 +1140,9 @@ class _RecaudosCarteraFormScreenState
         }
       }
 
-      // Distribuir el valor ajustado entre las facturas
-      _distribuirVrReciboEnFacturas(valorAjustado);
+      // NO distribuir automáticamente - el usuario debe seleccionar facturas y asignar valores manualmente
+      // Solo recalcular totales
+      _calcularTotales(actualizarVrRecibo: false);
     },
   );
 
@@ -2136,58 +2129,25 @@ class _RecaudosCarteraFormScreenState
           child: ListTile(
             leading: Checkbox(
               value: isChecked,
-              onChanged: (value) {
-                setState(() {
-                  final isChecked = value ?? false;
-                  // Actualizar en facturasParaMostrar y sincronizar con _carteraFacturas
-                  facturasParaMostrar[index]['ok'] = isChecked;
-                  if (facturasParaMostrar != _carteraFacturas &&
-                      index < _carteraFacturas.length) {
-                    _carteraFacturas[index]['ok'] = isChecked;
-                  } else if (facturasParaMostrar == _carteraFacturas) {
-                    _carteraFacturas[index]['ok'] = isChecked;
-                  }
-
-                  if (isChecked) {
-                    // Si se marca la factura y no tiene valor en Val. Recibo, asignar el saldo
-                    final valReciboActual =
-                        (facturasParaMostrar[index]['valRecibo'] as num?)
-                            ?.toDouble() ??
-                        0.0;
-                    if (valReciboActual == 0.0) {
-                      // Usar saldo si está disponible, sino usar totalDb
-                      final saldo =
-                          (facturasParaMostrar[index]['saldo'] as num?)
-                              ?.toDouble();
-                      final totalDb =
-                          (facturasParaMostrar[index]['totalDb'] as num?)
-                              ?.toDouble();
-                      final valorAsignar = saldo ?? totalDb ?? 0.0;
-                      facturasParaMostrar[index]['valRecibo'] = valorAsignar;
-
-                      // Sincronizar con _carteraFacturas
-                      if (facturasParaMostrar != _carteraFacturas &&
-                          index < _carteraFacturas.length) {
-                        _carteraFacturas[index]['valRecibo'] = valorAsignar;
-                      } else if (facturasParaMostrar == _carteraFacturas) {
-                        _carteraFacturas[index]['valRecibo'] = valorAsignar;
-                      }
-
-                      // Actualizar el controlador si existe
-                      if (_valReciboControllers.containsKey(index)) {
-                        final formatted = _formatCurrencyInput(valorAsignar);
-                        _valReciboControllers[index]!.text = formatted;
-                      }
-                    }
-                  } else {
-                    // Si se desmarca, poner Val. Recibo en 0
+              onChanged: (value) async {
+                final isChecked = value ?? false;
+                
+                if (isChecked) {
+                  // Si se marca la factura, abrir modal para ingresar valor a aplicar
+                  await _mostrarModalValorAplicar(context, index, facturasParaMostrar);
+                } else {
+                  // Si se desmarca, poner Val. Recibo en 0
+                  setState(() {
+                    facturasParaMostrar[index]['ok'] = false;
                     facturasParaMostrar[index]['valRecibo'] = 0.0;
 
                     // Sincronizar con _carteraFacturas
                     if (facturasParaMostrar != _carteraFacturas &&
                         index < _carteraFacturas.length) {
+                      _carteraFacturas[index]['ok'] = false;
                       _carteraFacturas[index]['valRecibo'] = 0.0;
                     } else if (facturasParaMostrar == _carteraFacturas) {
+                      _carteraFacturas[index]['ok'] = false;
                       _carteraFacturas[index]['valRecibo'] = 0.0;
                     }
 
@@ -2195,10 +2155,10 @@ class _RecaudosCarteraFormScreenState
                     if (_valReciboControllers.containsKey(index)) {
                       _valReciboControllers[index]!.text = '0';
                     }
-                  }
 
-                  _calcularTotales();
-                });
+                    _calcularTotales();
+                  });
+                }
               },
             ),
             title: Text(
@@ -2231,6 +2191,194 @@ class _RecaudosCarteraFormScreenState
         );
       },
     );
+  }
+
+  /// Mostrar modal para ingresar valor a aplicar a una factura
+  Future<void> _mostrarModalValorAplicar(
+    BuildContext context,
+    int index,
+    List<Map<String, dynamic>> facturasParaMostrar,
+  ) async {
+    final factura = facturasParaMostrar[index];
+    final saldoFactura = (factura['saldo'] as num?)?.toDouble() ?? 0.0;
+    
+    // Obtener valor del recibo
+    final vrReciboText = _vrReciboController.text
+        .replaceAll(',', '')
+        .replaceAll('.', '');
+    final vrReciboTotal = double.tryParse(vrReciboText) ?? 0.0;
+    
+    // Calcular valor ya aplicado a otras facturas
+    double valorYaAplicado = 0.0;
+    for (int i = 0; i < facturasParaMostrar.length; i++) {
+      if (i != index && (facturasParaMostrar[i]['ok'] as bool? ?? false)) {
+        valorYaAplicado += (facturasParaMostrar[i]['valRecibo'] as num?)?.toDouble() ?? 0.0;
+      }
+    }
+    
+    // Valor disponible para aplicar
+    final valorDisponible = vrReciboTotal - valorYaAplicado;
+    
+    // Valor máximo que se puede aplicar (el menor entre el saldo de la factura y el valor disponible)
+    final valorMaximo = saldoFactura < valorDisponible ? saldoFactura : valorDisponible;
+    
+    // Obtener el valor actual de la factura si ya tiene uno asignado
+    final valorActual = (factura['valRecibo'] as num?)?.toDouble() ?? 0.0;
+    
+    // Usar el valor actual si existe, sino dejar vacío para que el usuario ingrese
+    final valorController = TextEditingController(
+      text: valorActual > 0 ? _formatCurrencyInput(valorActual) : '',
+    );
+    
+    final result = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.attach_money, color: Colors.green),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Valor a Aplicar - Factura ${factura['factura'] ?? 'N/A'}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Saldo de la factura: ${_formatCurrency(saldoFactura)}',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Valor disponible del recibo: ${_formatCurrency(valorDisponible)}',
+              style: TextStyle(
+                fontSize: 14,
+                color: valorDisponible > 0 ? Colors.green : Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (valorYaAplicado > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Ya aplicado a otras facturas: ${_formatCurrency(valorYaAplicado)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: valorController,
+              decoration: InputDecoration(
+                labelText: 'Valor a Aplicar',
+                prefixText: r'$ ',
+                border: const OutlineInputBorder(),
+                helperText: 'Máximo: ${_formatCurrency(valorMaximo)}',
+              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              onChanged: (value) {
+                final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                final numValue = int.tryParse(cleanValue) ?? 0;
+                final doubleValue = numValue.toDouble();
+                
+                // Limitar al máximo permitido
+                if (doubleValue > valorMaximo) {
+                  final formatted = _formatCurrencyInput(valorMaximo);
+                  valorController.value = TextEditingValue(
+                    text: formatted,
+                    selection: TextSelection.collapsed(offset: formatted.length),
+                  );
+                } else {
+                  final formatted = _formatCurrencyInput(doubleValue);
+                  if (valorController.text != formatted) {
+                    valorController.value = TextEditingValue(
+                      text: formatted,
+                      selection: TextSelection.collapsed(offset: formatted.length),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+              onPressed: () {
+              final cleanValue = valorController.text
+                  .replaceAll(',', '')
+                  .replaceAll('.', '');
+              final valor = double.tryParse(cleanValue) ?? 0.0;
+              
+              // Permitir valor 0 para desmarcar la factura
+              if (valor == 0) {
+                Navigator.pop(context, 0.0);
+              } else if (valor > 0 && valor <= valorMaximo) {
+                Navigator.pop(context, valor);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'El valor no puede exceder ${_formatCurrency(valorMaximo)}',
+                    ),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Aplicar'),
+          ),
+        ],
+      ),
+    );
+    
+    if (result != null) {
+      setState(() {
+        if (result > 0) {
+          facturasParaMostrar[index]['ok'] = true;
+          facturasParaMostrar[index]['valRecibo'] = result;
+        } else {
+          // Si el valor es 0, desmarcar la factura
+          facturasParaMostrar[index]['ok'] = false;
+          facturasParaMostrar[index]['valRecibo'] = 0.0;
+        }
+
+        // Sincronizar con _carteraFacturas
+        if (facturasParaMostrar != _carteraFacturas &&
+            index < _carteraFacturas.length) {
+          _carteraFacturas[index]['ok'] = true;
+          _carteraFacturas[index]['valRecibo'] = result;
+        } else if (facturasParaMostrar == _carteraFacturas) {
+          _carteraFacturas[index]['ok'] = true;
+          _carteraFacturas[index]['valRecibo'] = result;
+        }
+
+        // Actualizar el controlador si existe
+        if (_valReciboControllers.containsKey(index)) {
+          final formatted = _formatCurrencyInput(result);
+          _valReciboControllers[index]!.text = formatted;
+        }
+
+        _calcularTotales();
+      });
+    }
   }
 
   /// Mostrar modal con detalle de factura
@@ -3365,10 +3513,20 @@ class _RecaudosCarteraFormScreenState
                       final vrRecibo = int.tryParse(vrReciboText) ?? 0;
                       final totalRecibo = vrRecibo.toDouble();
 
-                      // Obtener la primera factura seleccionada para obtener el rowid_sa
+                      // Obtener las facturas seleccionadas con sus valores
                       final facturasSeleccionadas = _carteraFacturas
-                          .where((f) => f['ok'] == true)
+                          .where((f) {
+                            final ok = f['ok'] == true;
+                            final valRecibo = (f['valRecibo'] as num?)?.toDouble() ?? 0.0;
+                            return ok && valRecibo > 0;
+                          })
+                          .map((f) => {
+                                'rowid': f['rowid'],
+                                'valRecibo': (f['valRecibo'] as num?)?.toInt() ?? 0,
+                              })
                           .toList();
+                      
+                      // Mantener rowidSa para retrocompatibilidad (deprecated)
                       int? rowidSa;
                       if (facturasSeleccionadas.isNotEmpty) {
                         final primeraFactura = facturasSeleccionadas.first;
@@ -3399,7 +3557,8 @@ class _RecaudosCarteraFormScreenState
                                   : _observacionController.text.trim(),
                               idCoMov: '001',
                               vrRecibo: vrRecibo, // Valor sin formatear, sin decimales
-                              rowidSa: rowidSa, // Primera factura seleccionada
+                              rowidSa: rowidSa, // Deprecated, usar facturasSeleccionadas
+                              facturasSeleccionadas: facturasSeleccionadas, // Lista de facturas con valores
                               usuario: 'lgarzon', // TODO: Obtener del usuario actual
                               idCaja: '001', // TODO: Obtener de la configuración
                               moneda: 'COP', // TODO: Obtener de la configuración

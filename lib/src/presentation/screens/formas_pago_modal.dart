@@ -24,7 +24,8 @@ class FormasPagoModal extends ConsumerStatefulWidget {
     this.notas,
     this.idCoMov,
     this.vrRecibo,
-    this.rowidSa,
+    this.rowidSa, // Deprecated, usar facturasSeleccionadas
+    this.facturasSeleccionadas, // Lista de facturas seleccionadas con sus valores
     this.usuario,
     this.idCaja,
     this.moneda,
@@ -47,7 +48,8 @@ class FormasPagoModal extends ConsumerStatefulWidget {
   final String? notas;
   final String? idCoMov;
   final int? vrRecibo; // Valor del recibo sin formatear
-  final int? rowidSa; // Primera factura seleccionada
+  final int? rowidSa; // Primera factura seleccionada (deprecated)
+  final List<Map<String, dynamic>>? facturasSeleccionadas; // Lista de facturas: [{'rowid': int, 'valRecibo': double}]
   final String? usuario;
   final String? idCaja;
   final String? moneda;
@@ -142,6 +144,33 @@ class _FormasPagoModalState extends ConsumerState<FormasPagoModal> {
     return diferencia < 0.01; // Tolerancia de 0.01
   }
 
+  /// Construir el array de facturas para p_rowid_sa
+  List<Map<String, dynamic>> _construirArrayFacturas() {
+    if (widget.facturasSeleccionadas == null || widget.facturasSeleccionadas!.isEmpty) {
+      // Si no hay facturas seleccionadas, retornar array vacío o usar el rowidSa antiguo si existe
+      if (widget.rowidSa != null && widget.rowidSa! > 0) {
+        return [
+          {
+            'p_id': widget.rowidSa!,
+            'p_valor': widget.vrRecibo ?? 0,
+          }
+        ];
+      }
+      return [];
+    }
+
+    // Construir array con las facturas seleccionadas
+    return widget.facturasSeleccionadas!.map((factura) {
+      final rowid = (factura['rowid'] as num?)?.toInt() ?? 0;
+      final valRecibo = (factura['valRecibo'] as num?)?.toInt() ?? 0;
+      
+      return {
+        'p_id': rowid,
+        'p_valor': valRecibo,
+      };
+    }).toList();
+  }
+
   /// Construir el JSON del recibo de caja con el formato exacto requerido por el endpoint
   Map<String, dynamic> _construirJsonRecibo(int numeroDocto) {
     final ahora = DateTime.now();
@@ -192,7 +221,7 @@ class _FormasPagoModalState extends ConsumerState<FormasPagoModal> {
       'p_id_medio_pago': 'CG1', // Valor por defecto
       'p_id_cta_bancaria': idCtaBancaria,
       'p_referencia_med': referenciaMed,
-      'p_rowid_sa': widget.rowidSa ?? 0,
+      'p_rowid_sa': _construirArrayFacturas(),
     };
   }
 
