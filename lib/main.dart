@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'src/presentation/screens/formularios_screen.dart';
 import 'src/presentation/screens/recibos_screen.dart';
+import 'src/presentation/screens/reembolsos_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: MyApp()));
@@ -49,6 +50,7 @@ class MyApp extends StatelessWidget {
       home: const FormulariosScreen(),
       routes: {
         '/recibos': (context) => const RecibosScreen(),
+        '/reembolsos': (context) => const ReembolsosScreen(),
       },
       onGenerateRoute: (settings) {
         // Animación personalizada para navegación entre formularios
@@ -57,6 +59,29 @@ class MyApp extends StatelessWidget {
             return PageRouteBuilder<void>(
               settings: settings,
               pageBuilder: (context, animation, secondaryAnimation) => const RecibosScreen(),
+              transitionDuration: const Duration(milliseconds: 400),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                const begin = Offset(1.0, 0.0);
+                const end = Offset.zero;
+                const curve = Curves.easeInOutCubic;
+
+                var tween = Tween(begin: begin, end: end).chain(
+                  CurveTween(curve: curve),
+                );
+
+                return SlideTransition(
+                  position: animation.drive(tween),
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                );
+              },
+            );
+          case '/reembolsos':
+            return PageRouteBuilder<void>(
+              settings: settings,
+              pageBuilder: (context, animation, secondaryAnimation) => const ReembolsosScreen(),
               transitionDuration: const Duration(milliseconds: 400),
               transitionsBuilder: (context, animation, secondaryAnimation, child) {
                 const begin = Offset(1.0, 0.0);

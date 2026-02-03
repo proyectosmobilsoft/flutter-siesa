@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/company_notifier.dart';
 import 'en_desarrollo_screen.dart';
 import 'recibos_screen.dart';
+import 'reembolsos_screen.dart';
 import 'viaticos_screen.dart';
 
 /// Pantalla de formularios con estado vacío y drawer de navegación
@@ -710,38 +711,63 @@ class _FormulariosScreenState extends ConsumerState<FormulariosScreen>
   
   /// Construir accesos directos
   Widget _buildQuickAccess() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _buildQuickAccessCard(
-            title: 'Recibos',
-            subtitle: 'Gestionar recibos de caja',
-            icon: Icons.receipt_long,
-            color: Colors.blue,
-            onTap: () {
-              Navigator.push<void>(
-                context,
-                MaterialPageRoute<void>(builder: (context) => const RecibosScreen()),
-              );
-            },
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildQuickAccessCard(
+                title: 'Recibos',
+                subtitle: 'Gestionar recibos de caja',
+                icon: Icons.receipt_long,
+                color: Colors.blue,
+                onTap: () {
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(builder: (context) => const RecibosScreen()),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildQuickAccessCard(
+                title: 'Reembolso',
+                subtitle: 'Legalización anticipo',
+                icon: Icons.replay_rounded,
+                color: Colors.teal,
+                onTap: () {
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(builder: (context) => const ReembolsosScreen()),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _buildQuickAccessCard(
-            title: 'Viaticos',
-            subtitle: 'Gestionar viáticos',
-            icon: Icons.card_travel,
-            color: Colors.orange,
-            onTap: () {
-              Navigator.push<void>(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (context) => const ViaticosScreen(),
-                ),
-              );
-            },
-          ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _buildQuickAccessCard(
+                title: 'Viaticos',
+                subtitle: 'Gestionar viáticos',
+                icon: Icons.card_travel,
+                color: Colors.orange,
+                onTap: () {
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (context) => const ViaticosScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: const SizedBox()),
+          ],
         ),
       ],
     );
@@ -1091,6 +1117,18 @@ class _FormulariosScreenState extends ConsumerState<FormulariosScreen>
                 _buildDrawerItem(
                   context,
                   index: 2,
+                  icon: Icons.replay_rounded,
+                  title: 'Reembolso',
+                  color: Colors.teal[300]!,
+                  onTap: () {
+                    _navigateWithAnimation(context, () {
+                      Navigator.pushNamed(context, '/reembolsos');
+                    });
+                  },
+                ),
+                _buildDrawerItem(
+                  context,
+                  index: 3,
                   icon: Icons.card_travel_outlined,
                   title: 'Viaticos',
                   color: Colors.orange[300]!,
@@ -1107,7 +1145,7 @@ class _FormulariosScreenState extends ConsumerState<FormulariosScreen>
                 ),
                 _buildDrawerItem(
                   context,
-                  index: 3,
+                  index: 4,
                   icon: Icons.receipt_outlined,
                   title: 'Facturas',
                   color: Colors.blue[300]!,
@@ -1124,7 +1162,7 @@ class _FormulariosScreenState extends ConsumerState<FormulariosScreen>
                 ),
                 _buildDrawerItem(
                   context,
-                  index: 4,
+                  index: 5,
                   icon: Icons.account_balance_wallet_outlined,
                   title: 'Presupuesto',
                   color: Colors.blue[300]!,
@@ -1141,7 +1179,7 @@ class _FormulariosScreenState extends ConsumerState<FormulariosScreen>
                 ),
                 _buildDrawerItem(
                   context,
-                  index: 5,
+                  index: 6,
                   icon: Icons.credit_card_outlined,
                   title: 'Notas de Crédito',
                   color: Colors.blue[300]!,
@@ -1158,7 +1196,7 @@ class _FormulariosScreenState extends ConsumerState<FormulariosScreen>
                 ),
                 _buildDrawerItem(
                   context,
-                  index: 6,
+                  index: 7,
                   icon: Icons.inventory_2_outlined,
                   title: 'Artículo/Servicios',
                   color: Colors.green,
@@ -1175,7 +1213,7 @@ class _FormulariosScreenState extends ConsumerState<FormulariosScreen>
                 ),
                 _buildDrawerItem(
                   context,
-                  index: 7,
+                  index: 8,
                   icon: Icons.people_outline,
                   title: 'Clientes/Proveedores',
                   color: Colors.red,
@@ -1192,7 +1230,7 @@ class _FormulariosScreenState extends ConsumerState<FormulariosScreen>
                 ),
                 _buildDrawerItem(
                   context,
-                  index: 8,
+                  index: 9,
                   icon: Icons.bar_chart_outlined,
                   title: 'Informes, Exportación',
                   color: Colors.green,
